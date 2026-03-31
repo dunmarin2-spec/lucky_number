@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>이상형 에너지 추출기 - VIP 로컬 연동</title>
+    <title>이상형 에너지 추출기 - 무적 최적화 완결판</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
         * { box-sizing: border-box; touch-action: manipulation; }
@@ -15,6 +15,7 @@
         #canvas-wrap.active { border-color: #fee500; animation: shake 0.2s infinite; }
         @keyframes shake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, 1px); } }
 
+        /* 💡 이미지 로딩 스피너 */
         #img-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #94a3b8; font-size: 14px; z-index: 1; font-weight: bold; animation: blink 1s infinite; display: none; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -22,6 +23,7 @@
         #touchCanvas { width: 100%; height: 100%; touch-action: none; position: absolute; top: 0; left: 0; z-index: 10; opacity: 0; }
         #bodyFxCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: none; }
         
+        /* 💡 안내 텍스트 (사진 안 가리게 맨 아래 배치) */
         #status-text { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #fee500; font-size: 16px; font-weight: 900; z-index: 20; pointer-events: none; background: rgba(0,0,0,0.75); padding: 12px 20px; border-radius: 30px; width: 85%; border: 1px solid #fee500; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
@@ -96,36 +98,43 @@
     let timeouts = []; 
     let animationId = null;
     let lastImageIndex = -1;
+    let imgRetryCount = 0; // 이미지 로딩 실패 방지용
 
-    // 💡 깃허브 로컬 이미지 로딩 최적화
+    // 💡 [핵심] 깃허브 로컬 이미지 무한 뺑뺑이 (1번 ~ 164번)
     function setRandomImage() {
         imgLoader.style.display = 'block';
         bgImage.style.opacity = '0';
 
-        // 1. 1부터 168까지의 숫자 중 무작위 선택 (비어있는 번호 대비 무한반복 방지 포함)
         let randomIndex;
         do {
-            randomIndex = Math.floor(Math.random() * 168) + 1;
+            randomIndex = Math.floor(Math.random() * 164) + 1;
         } while (randomIndex === lastImageIndex);
         lastImageIndex = randomIndex;
 
-        // 2. 가짜 이미지 객체로 먼저 로딩 확인
         const tempImg = new Image();
         tempImg.onload = function() {
+            imgRetryCount = 0; // 성공하면 에러 카운트 초기화
             bgImage.src = this.src;
             imgLoader.style.display = 'none';
             bgImage.style.opacity = '1';
         };
         tempImg.onerror = function() {
+            imgRetryCount++;
+            // 만약 10번 연속 사진을 못 찾으면 멈춤 (브라우저 과부하 방지)
+            if (imgRetryCount > 10) {
+                imgLoader.innerText = "⚠️ 이미지 확인 필요";
+                return;
+            }
             // 중간에 비어있는 번호가 걸리면 즉시 다음 번호 시도
             setRandomImage();
         };
-        // 💡 형님이 윈도우에서 바꾼 이름 형태: photo (숫자).jpg
+        // 형님이 폴더에 넣으신 형식: photo (숫자).jpg
         tempImg.src = `./images/photo (${randomIndex}).jpg`;
     }
     
     setRandomImage(); 
 
+    // 💡 강력한 3단 콤보 폭발 사운드
     function playMegaExplosion() {
         try {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -165,6 +174,7 @@
     window.addEventListener('resize', initCanvas);
     initCanvas();
 
+    // 💡 터치 이벤트 시작
     ['mousedown', 'touchstart'].forEach(evt => {
         touchCanvas.addEventListener(evt, (e) => {
             if (isBusy) return;
@@ -195,13 +205,25 @@
         ani();
     }
 
+    // 💡 [핵심] 먹통(무한루프) 완전 차단된 무적 번호 생성기
     function generateLuckyNumbers(x, y, t) {
         const res = new Set();
+        let i = 0; // 엔진
         const seed = Math.floor((x * y * 1000) + t);
+        
         while (res.size < 6) {
-            const n = Math.floor((Math.abs(Math.sin(seed + res.size * 19) * 100000) % 45)) + 1;
+            const n = Math.floor((Math.abs(Math.sin(seed + i * 19) * 100000) % 45)) + 1;
             res.add(n);
+            i++; 
+            // 폰 터지는 거 막는 최후의 방어선
+            if (i > 1000) break; 
         }
+        
+        // 만약 숫자가 6개가 안 채워졌으면 랜덤으로 강제 주입
+        while (res.size < 6) {
+            res.add(Math.floor(Math.random() * 45) + 1);
+        }
+        
         return Array.from(res).sort((a, b) => a - b);
     }
 
@@ -236,15 +258,18 @@
         animationId = requestAnimationFrame(animate);
     }
 
+    // 💡 결과 출력 (1초마다 펑펑)
     function showResults(nums) {
         loading.style.display = 'none'; resultArea.style.display = 'block';
         wrap.classList.remove('active');
         ballWrap.innerHTML = '';
+        
         nums.forEach((n, i) => {
             const b = document.createElement('div');
             b.className = 'ball';
             let color = n <= 10 ? '#fbc02d' : n <= 20 ? '#1e88e5' : n <= 30 ? '#e53935' : n <= 40 ? '#757575' : '#43a047';
             b.style.background = color; b.innerText = n; ballWrap.appendChild(b);
+            
             const t = setTimeout(() => {
                 b.classList.add('show');
                 playMegaExplosion();
@@ -267,6 +292,7 @@
         });
     }
 
+    // 💡 메모리 쓰레기 청소 및 다시 시작
     function resetApp() {
         timeouts.forEach(t => clearTimeout(t));
         timeouts = [];
