@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>이상형 에너지 추출기 - VIP 로딩 최적화</title>
+    <title>이상형 에너지 추출기 - VIP 로컬 연동</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
         * { box-sizing: border-box; touch-action: manipulation; }
@@ -15,8 +15,8 @@
         #canvas-wrap.active { border-color: #fee500; animation: shake 0.2s infinite; }
         @keyframes shake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, 1px); } }
 
-        /* 💡 이미지 로딩 스피너 (검은화면 방지용) */
         #img-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #94a3b8; font-size: 14px; z-index: 1; font-weight: bold; animation: blink 1s infinite; display: none; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
 
         #bg-image { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 5; transition: opacity 0.4s ease; opacity: 0; }
         #touchCanvas { width: 100%; height: 100%; touch-action: none; position: absolute; top: 0; left: 0; z-index: 10; opacity: 0; }
@@ -26,7 +26,6 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
         #loading { display: none; margin-top: 25px; color: #fee500; font-weight: 900; font-size: 20px; animation: blink 0.5s infinite; text-shadow: 0 0 10px #fee500; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
         
         #result-area { display: none; margin-top: 30px; background: rgba(0,0,0,0.95); padding: 35px; border-radius: 25px; border: 4px solid #fee500; box-shadow: 0 0 50px rgba(254, 229, 0, 0.3); }
         .ball-container { display: flex; justify-content: center; gap: 12px; margin-bottom: 35px; flex-wrap: wrap; }
@@ -98,29 +97,19 @@
     let animationId = null;
     let lastImageIndex = -1;
 
-    // 🔥 형님 전용 VIP 보관함 🔥
-    // 인터넷에서 주운 화끈한 사진 주소(.jpg, .png 등)를 이 아래에 따옴표("") 안에 넣고 쉼표(,)로 구분해서 계속 추가하시면 됩니다!
-    const mySecretImages = [
-        "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop", // 일단 건전한 기본 사진 1
-        "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1000&auto=format&fit=crop", // 기본 사진 2
-        "https://images.unsplash.com/photo-1529139513466-a28975982166?q=80&w=1000&auto=format&fit=crop"  // 기본 사진 3
-        // 예시: "https://형님이찾은사진주소.com/image.jpg",
-        // 예시: "https://어디선가퍼온사진.com/hot.png"
-    ];
-
-    // 💡 검은화면 완벽 해결 로직 (미리 불러오기)
+    // 💡 깃허브 로컬 이미지 로딩 최적화
     function setRandomImage() {
         imgLoader.style.display = 'block';
         bgImage.style.opacity = '0';
 
-        // 연속으로 같은 사진 안 나오게 처리
+        // 1. 1부터 168까지의 숫자 중 무작위 선택 (비어있는 번호 대비 무한반복 방지 포함)
         let randomIndex;
         do {
-            randomIndex = Math.floor(Math.random() * mySecretImages.length);
-        } while (randomIndex === lastImageIndex && mySecretImages.length > 1);
+            randomIndex = Math.floor(Math.random() * 168) + 1;
+        } while (randomIndex === lastImageIndex);
         lastImageIndex = randomIndex;
 
-        // 보이지 않는 가짜 이미지 객체로 다운로드 완료 확인 후 진짜 화면에 적용
+        // 2. 가짜 이미지 객체로 먼저 로딩 확인
         const tempImg = new Image();
         tempImg.onload = function() {
             bgImage.src = this.src;
@@ -128,42 +117,45 @@
             bgImage.style.opacity = '1';
         };
         tempImg.onerror = function() {
-            // 혹시 형님이 넣은 주소가 엑박 뜨면 바로 다음 사진으로 패스! (검은화면 방지)
+            // 중간에 비어있는 번호가 걸리면 즉시 다음 번호 시도
             setRandomImage();
         };
-        tempImg.src = mySecretImages[randomIndex];
+        // 💡 형님이 윈도우에서 바꾼 이름 형태: photo (숫자).jpg
+        tempImg.src = `./images/photo (${randomIndex}).jpg`;
     }
     
-    setRandomImage(); // 최초 실행
+    setRandomImage(); 
 
     function playMegaExplosion() {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const now = audioCtx.currentTime;
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const now = audioCtx.currentTime;
 
-        const bass = audioCtx.createOscillator();
-        const bGain = audioCtx.createGain();
-        bass.type = 'sine';
-        bass.frequency.setValueAtTime(150, now);
-        bass.frequency.exponentialRampToValueAtTime(0.01, now + 0.6);
-        bGain.gain.setValueAtTime(1.5, now);
-        bGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-        bass.connect(bGain); bGain.connect(audioCtx.destination);
-        bass.start(); bass.stop(now + 0.6);
+            const bass = audioCtx.createOscillator();
+            const bGain = audioCtx.createGain();
+            bass.type = 'sine';
+            bass.frequency.setValueAtTime(150, now);
+            bass.frequency.exponentialRampToValueAtTime(0.01, now + 0.6);
+            bGain.gain.setValueAtTime(1.5, now);
+            bGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+            bass.connect(bGain); bGain.connect(audioCtx.destination);
+            bass.start(); bass.stop(now + 0.6);
 
-        const bufferSize = audioCtx.sampleRate * 0.5;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        const nGain = audioCtx.createGain();
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'lowpass'; filter.frequency.value = 1000;
-        nGain.gain.setValueAtTime(0.6, now);
-        nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-        noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
-        noise.start();
+            const bufferSize = audioCtx.sampleRate * 0.5;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const nGain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass'; filter.frequency.value = 1000;
+            nGain.gain.setValueAtTime(0.6, now);
+            nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
+            noise.start();
+        } catch(e) { console.log("Audio Error Ignored"); }
     }
 
     function initCanvas() {
@@ -235,7 +227,7 @@
     function animate() {
         if (particles.length === 0) { 
             bodyFxCtx.clearRect(0, 0, bodyFxCanvas.width, bodyFxCanvas.height); 
-            cancelAnimationFrame(animationId);
+            if (animationId) cancelAnimationFrame(animationId);
             return; 
         }
         bodyFxCtx.clearRect(0, 0, bodyFxCanvas.width, bodyFxCanvas.height);
