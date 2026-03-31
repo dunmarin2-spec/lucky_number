@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>이상형 에너지 추출기 - VIP 로딩 최적화</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body { font-family: 'Pretendard', sans-serif; margin: 0; padding: 15px; background: #070b14; color: #fff; text-align: center; overflow-x: hidden; }
+        .container { width: 100%; max-width: 500px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+        h1 { font-size: 28px; font-weight: 900; color: #fee500; margin-top: 20px; text-shadow: 0 0 20px rgba(254, 229, 0, 0.8); }
+        
+        #canvas-wrap { width: 100%; aspect-ratio: 2 / 3; background: #111; border-radius: 25px; border: 4px solid #334155; position: relative; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.7); }
+        #canvas-wrap.active { border-color: #fee500; animation: shake 0.2s infinite; }
+        @keyframes shake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, 1px); } }
+
+        /* 💡 이미지 로딩 스피너 (검은화면 방지용) */
+        #img-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #94a3b8; font-size: 14px; z-index: 1; font-weight: bold; animation: blink 1s infinite; display: none; }
+
+        #bg-image { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 5; transition: opacity 0.4s ease; opacity: 0; }
+        #touchCanvas { width: 100%; height: 100%; touch-action: none; position: absolute; top: 0; left: 0; z-index: 10; opacity: 0; }
+        #bodyFxCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: none; }
+        
+        #status-text { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #fee500; font-size: 16px; font-weight: 900; z-index: 20; pointer-events: none; background: rgba(0,0,0,0.75); padding: 12px 20px; border-radius: 30px; width: 85%; border: 1px solid #fee500; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        #loading { display: none; margin-top: 25px; color: #fee500; font-weight: 900; font-size: 20px; animation: blink 0.5s infinite; text-shadow: 0 0 10px #fee500; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } }
+        
+        #result-area { display: none; margin-top: 30px; background: rgba(0,0,0,0.95); padding: 35px; border-radius: 25px; border: 4px solid #fee500; box-shadow: 0 0 50px rgba(254, 229, 0, 0.3); }
+        .ball-container { display: flex; justify-content: center; gap: 12px; margin-bottom: 35px; flex-wrap: wrap; }
+        .ball { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; color: #fff; transform: scale(0); transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.5); border: 3px solid rgba(255,255,255,0.4); }
+        .ball.show { transform: scale(1); box-shadow: 0 0 20px rgba(255,255,255,0.5); }
+        
+        .btn-retry { width: 100%; padding: 18px; border: none; border-radius: 12px; background: #fee500; color: #3c1e1e; font-weight: 900; font-size: 20px; box-shadow: 0 6px 0 #d1bc00; cursor: pointer; transition: 0.1s; }
+        .btn-retry:active { transform: translateY(3px); box-shadow: 0 3px 0 #d1bc00; }
+
+        .revenue-box { margin-top: 40px; padding: 25px; background: #1e293b; border-radius: 20px; border: 2px solid #475569; margin-bottom: 80px; }
+        .kakao-pay { background: #fee500; color: #3c1e1e; text-decoration: none; display: block; padding: 18px; border-radius: 12px; font-weight: 900; margin-bottom: 25px; text-align: center; font-size: 18px; box-shadow: 0 6px 0 #d1bc00; }
+        .coupang-form-wrap { background: white; border-radius: 15px; padding: 18px; }
+        .coupang-form { display: flex; gap: 10px; }
+        .coupang-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 10px; color: #000; font-size: 16px; outline: none; }
+        .coupang-btn { background: #334155; color: white; border: none; padding: 0 20px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<canvas id="bodyFxCanvas"></canvas>
+
+<div class="container">
+    <h1>☯️ 이상형 에너지 추출기</h1>
+    <div style="font-size:15px; color:#94a3b8; margin-bottom:25px;">당신의 운명을 터치하세요</div>
+    
+    <div id="canvas-wrap">
+        <div id="img-loader">📸 사진 불러오는 중...</div>
+        <img src="" id="bg-image">
+        <canvas id="touchCanvas"></canvas>
+        <div id="status-text">👆 끌리는 부위를 터치하세요</div>
+    </div>
+
+    <div id="loading">🔥 에너지 응축 중... 대폭발 대기 🔥</div>
+
+    <div id="result-area">
+        <div style="font-size:14px; color:#fee500; font-weight:900; margin-bottom:25px; letter-spacing: 2px;">⚡ 에너지 추출 성공 ⚡</div>
+        <div class="ball-container" id="ballWrap"></div>
+        <button class="btn-retry" onclick="resetApp()">🔄 새로운 미녀와 다시하기</button>
+    </div>
+
+    <div class="revenue-box">
+        <a href="https://qr.kakaopay.com/FRK8J0SAD" class="kakao-pay" target="_blank">💛 찬둥이 커피 후원하기</a>
+        <div class="coupang-form-wrap">
+            <form action="https://www.coupang.com/np/search" method="get" target="_blank" class="coupang-form">
+                <input type="hidden" name="channel" value="AF4757238">
+                <input type="text" name="q" class="coupang-input" placeholder="행운의 아이템 검색">
+                <button type="submit" class="coupang-btn">검색</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const touchCanvas = document.getElementById('touchCanvas');
+    const touchCtx = touchCanvas.getContext('2d');
+    const bodyFxCanvas = document.getElementById('bodyFxCanvas');
+    const bodyFxCtx = bodyFxCanvas.getContext('2d');
+    const bgImage = document.getElementById('bg-image');
+    const imgLoader = document.getElementById('img-loader');
+    const wrap = document.getElementById('canvas-wrap');
+    const loading = document.getElementById('loading');
+    const resultArea = document.getElementById('result-area');
+    const ballWrap = document.getElementById('ballWrap');
+
+    let isBusy = false;
+    let particles = [];
+    let audioCtx = null;
+    let timeouts = []; 
+    let animationId = null;
+    let lastImageIndex = -1;
+
+    // 🔥 형님 전용 VIP 보관함 🔥
+    // 인터넷에서 주운 화끈한 사진 주소(.jpg, .png 등)를 이 아래에 따옴표("") 안에 넣고 쉼표(,)로 구분해서 계속 추가하시면 됩니다!
+    const mySecretImages = [
+        "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop", // 일단 건전한 기본 사진 1
+        "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1000&auto=format&fit=crop", // 기본 사진 2
+        "https://images.unsplash.com/photo-1529139513466-a28975982166?q=80&w=1000&auto=format&fit=crop"  // 기본 사진 3
+        // 예시: "https://형님이찾은사진주소.com/image.jpg",
+        // 예시: "https://어디선가퍼온사진.com/hot.png"
+    ];
+
+    // 💡 검은화면 완벽 해결 로직 (미리 불러오기)
+    function setRandomImage() {
+        imgLoader.style.display = 'block';
+        bgImage.style.opacity = '0';
+
+        // 연속으로 같은 사진 안 나오게 처리
+        let randomIndex;
+        do {
+            randomIndex = Math.floor(Math.random() * mySecretImages.length);
+        } while (randomIndex === lastImageIndex && mySecretImages.length > 1);
+        lastImageIndex = randomIndex;
+
+        // 보이지 않는 가짜 이미지 객체로 다운로드 완료 확인 후 진짜 화면에 적용
+        const tempImg = new Image();
+        tempImg.onload = function() {
+            bgImage.src = this.src;
+            imgLoader.style.display = 'none';
+            bgImage.style.opacity = '1';
+        };
+        tempImg.onerror = function() {
+            // 혹시 형님이 넣은 주소가 엑박 뜨면 바로 다음 사진으로 패스! (검은화면 방지)
+            setRandomImage();
+        };
+        tempImg.src = mySecretImages[randomIndex];
+    }
+    
+    setRandomImage(); // 최초 실행
+
+    function playMegaExplosion() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+
+        const bass = audioCtx.createOscillator();
+        const bGain = audioCtx.createGain();
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(150, now);
+        bass.frequency.exponentialRampToValueAtTime(0.01, now + 0.6);
+        bGain.gain.setValueAtTime(1.5, now);
+        bGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        bass.connect(bGain); bGain.connect(audioCtx.destination);
+        bass.start(); bass.stop(now + 0.6);
+
+        const bufferSize = audioCtx.sampleRate * 0.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const nGain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass'; filter.frequency.value = 1000;
+        nGain.gain.setValueAtTime(0.6, now);
+        nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
+        noise.start();
+    }
+
+    function initCanvas() {
+        touchCanvas.width = wrap.clientWidth; touchCanvas.height = wrap.clientHeight;
+        bodyFxCanvas.width = window.innerWidth; bodyFxCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', initCanvas);
+    initCanvas();
+
+    ['mousedown', 'touchstart'].forEach(evt => {
+        touchCanvas.addEventListener(evt, (e) => {
+            if (isBusy) return;
+            isBusy = true;
+            document.getElementById('status-text').style.display = 'none';
+            wrap.classList.add('active');
+            loading.style.display = 'block';
+            
+            const rect = touchCanvas.getBoundingClientRect();
+            let cx = evt === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            let cy = evt === 'touchstart' ? e.touches[0].clientY : e.clientY;
+            drawRipple(cx - rect.left, cy - rect.top);
+
+            const t = setTimeout(() => showResults(generateLuckyNumbers(Math.random(), Math.random(), performance.now())), 1500);
+            timeouts.push(t);
+        });
+    });
+
+    function drawRipple(x, y) {
+        let r = 0; let op = 1;
+        function ani() {
+            if (r > touchCanvas.width) { touchCtx.clearRect(0,0,touchCanvas.width,touchCanvas.height); return; }
+            touchCtx.clearRect(0,0,touchCanvas.width,touchCanvas.height);
+            touchCtx.beginPath(); touchCtx.arc(x,y,r,0,Math.PI*2);
+            touchCtx.strokeStyle = `rgba(254,229,0,${op})`; touchCtx.lineWidth = 5; touchCtx.stroke();
+            r += 10; op -= 0.04; requestAnimationFrame(ani);
+        }
+        ani();
+    }
+
+    function generateLuckyNumbers(x, y, t) {
+        const res = new Set();
+        const seed = Math.floor((x * y * 1000) + t);
+        while (res.size < 6) {
+            const n = Math.floor((Math.abs(Math.sin(seed + res.size * 19) * 100000) % 45)) + 1;
+            res.add(n);
+        }
+        return Array.from(res).sort((a, b) => a - b);
+    }
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x; this.y = y; this.color = color;
+            this.angle = Math.random() * Math.PI * 2;
+            this.speed = Math.random() * 20 + 10;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+            this.gravity = 0.3; this.alpha = 1;
+            this.decay = Math.random() * 0.01 + 0.015;
+            this.size = Math.random() * 6 + 2;
+        }
+        update() { this.vy += this.gravity; this.x += this.vx; this.y += this.vy; this.alpha -= this.decay; }
+        draw(c) {
+            c.save(); c.globalAlpha = this.alpha; c.beginPath();
+            c.arc(this.x, this.y, this.size, 0, Math.PI * 2); c.fillStyle = this.color;
+            c.shadowBlur = 20; c.shadowColor = this.color; c.fill(); c.restore();
+        }
+    }
+
+    function animate() {
+        if (particles.length === 0) { 
+            bodyFxCtx.clearRect(0, 0, bodyFxCanvas.width, bodyFxCanvas.height); 
+            cancelAnimationFrame(animationId);
+            return; 
+        }
+        bodyFxCtx.clearRect(0, 0, bodyFxCanvas.width, bodyFxCanvas.height);
+        particles = particles.filter(p => p.alpha > 0);
+        particles.forEach(p => { p.update(); p.draw(bodyFxCtx); });
+        animationId = requestAnimationFrame(animate);
+    }
+
+    function showResults(nums) {
+        loading.style.display = 'none'; resultArea.style.display = 'block';
+        wrap.classList.remove('active');
+        ballWrap.innerHTML = '';
+        nums.forEach((n, i) => {
+            const b = document.createElement('div');
+            b.className = 'ball';
+            let color = n <= 10 ? '#fbc02d' : n <= 20 ? '#1e88e5' : n <= 30 ? '#e53935' : n <= 40 ? '#757575' : '#43a047';
+            b.style.background = color; b.innerText = n; ballWrap.appendChild(b);
+            const t = setTimeout(() => {
+                b.classList.add('show');
+                playMegaExplosion();
+                document.body.style.backgroundColor = color + '22';
+                setTimeout(() => { document.body.style.backgroundColor = '#070b14'; }, 100);
+                
+                for (let k = 0; k < 5; k++) {
+                    const tx = Math.random() * window.innerWidth;
+                    const ty = Math.random() * window.innerHeight * 0.6;
+                    for (let j = 0; j < 50; j++) particles.push(new Particle(tx, ty, color));
+                }
+                if (i === 0) animate();
+                
+                if (i === 5) {
+                    const scrollT = setTimeout(() => resultArea.scrollIntoView({ behavior: 'smooth' }), 1200);
+                    timeouts.push(scrollT);
+                }
+            }, i * 1000);
+            timeouts.push(t);
+        });
+    }
+
+    function resetApp() {
+        timeouts.forEach(t => clearTimeout(t));
+        timeouts = [];
+        if (animationId) cancelAnimationFrame(animationId);
+        
+        particles = [];
+        bodyFxCtx.clearRect(0, 0, bodyFxCanvas.width, bodyFxCanvas.height);
+        touchCtx.clearRect(0, 0, touchCanvas.width, touchCanvas.height);
+        
+        isBusy = false; 
+        resultArea.style.display = 'none';
+        document.getElementById('status-text').style.display = 'block';
+        
+        setRandomImage();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+</script>
+</body>
+</html>
